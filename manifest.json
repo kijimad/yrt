@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "YouTube Caption Repeater",
+  "version": "1.0.0",
+  "description": "Repeat YouTube captions segment by segment for language learning",
+  "permissions": [],
+  "content_scripts": [
+    {
+      "matches": ["*://www.youtube.com/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://www.youtube.com/*"],
+      "js": ["page.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    }
+  ],
+  "icons": {}
+}
