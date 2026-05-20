@@ -8,13 +8,15 @@
   let isActive = false;
   let looping = true;
   let pollTimer = null;
+  let repeatCount = 0;
+  let seekedAt = 0;
 
   // Parse YouTube's timedtext (srv3 format) XML
   function parseSrv3(xml) {
     const parser = new DOMParser();
     const doc = parser.parseFromString(xml, 'text/xml');
     const paragraphs = doc.querySelectorAll('body p');
-    const result = [];
+    const raw = [];
     paragraphs.forEach((p) => {
       const tMs = parseInt(p.getAttribute('t') || '0', 10);
       const dMs = parseInt(p.getAttribute('d') || '0', 10);
@@ -22,9 +24,56 @@
       const end = (tMs + dMs) / 1000;
       const text = p.textContent.replace(/\n/g, ' ').trim();
       if (text && dMs > 0) {
-        result.push({ start, end, text });
+        raw.push({ start, end, text });
       }
     });
+    return mergeBySentence(raw);
+  }
+
+  // Merge raw segments so each group ends at a sentence boundary
+  function mergeBySentence(raw) {
+    if (!raw.length) return [];
+    const sentenceEnd = /[.!?]["'\u201D\u2019)]*\s*$/;
+    const MIN_DURATION = 3;
+    const MAX_DURATION = 8;
+
+    // Step 1: merge until sentence end, but force split at MAX_DURATION
+    const merged = [];
+    let current = { ...raw[0] };
+    for (let i = 1; i < raw.length; i++) {
+      const prev = raw[i - 1];
+      const next = raw[i];
+      const duration = next.end - current.start;
+      if (sentenceEnd.test(prev.text) || duration > MAX_DURATION) {
+        merged.push(current);
+        current = { ...next };
+      } else {
+        current.end = next.end;
+        current.text = current.text + ' ' + next.text;
+      }
+    }
+    merged.push(current);
+
+    // Step 2: merge short segments with the next one
+    const result = [];
+    let acc = { ...merged[0] };
+    for (let i = 1; i < merged.length; i++) {
+      if ((acc.end - acc.start) < MIN_DURATION) {
+        acc.end = merged[i].end;
+        acc.text = acc.text + ' ' + merged[i].text;
+      } else {
+        result.push(acc);
+        acc = { ...merged[i] };
+      }
+    }
+    result.push(acc);
+
+    // Step 3: tighten end times — set each segment's end to the next segment's start
+    // so loops don't play into the next caption's audio
+    for (let i = 0; i < result.length - 1; i++) {
+      result[i].end = result[i + 1].start;
+    }
+
     return result;
   }
 
@@ -101,8 +150,13 @@
           <span id="yrt-counter">-</span>
           <span id="yrt-time">-</span>
         </div>
+        <div class="yrt-captions">
+          <div class="yrt-caption-row yrt-caption-prev" id="yrt-caption-prev"></div>
+          <div class="yrt-caption-row yrt-caption-current" id="yrt-caption-current"></div>
+          <div class="yrt-caption-row yrt-caption-next" id="yrt-caption-next"></div>
+        </div>
         <div class="yrt-repeat-indicator" id="yrt-repeat-indicator">
-          <span class="yrt-loop-icon">&#x21BB;</span> Repeating
+          <span class="yrt-loop-icon">&#x21BB;</span> <span id="yrt-repeat-count">0</span>
         </div>
         <div class="yrt-controls">
           <button class="yrt-btn yrt-nav-btn" id="yrt-prev" title="Previous caption">&laquo; Prev</button>
@@ -155,6 +209,7 @@
     document.getElementById('yrt-next').addEventListener('click', () => {
       if (currentIndex < captions.length - 1) {
         currentIndex++;
+        resetRepeatCount();
         seekToCaption(currentIndex);
       }
     });
@@ -162,6 +217,7 @@
     document.getElementById('yrt-prev').addEventListener('click', () => {
       if (currentIndex > 0) {
         currentIndex--;
+        resetRepeatCount();
         seekToCaption(currentIndex);
       }
     });
@@ -193,6 +249,7 @@
       e.stopPropagation();
       if (currentIndex < captions.length - 1) {
         currentIndex++;
+        resetRepeatCount();
         seekToCaption(currentIndex);
       }
     } else if (e.key === 'ArrowLeft' && e.shiftKey) {
@@ -200,6 +257,7 @@
       e.stopPropagation();
       if (currentIndex > 0) {
         currentIndex--;
+        resetRepeatCount();
         seekToCaption(currentIndex);
       }
     } else if (e.key === 'r' || e.key === 'R') {
@@ -215,8 +273,15 @@
     if (!video || !captions[idx]) return;
     const cap = captions[idx];
     video.currentTime = cap.start;
+    seekedAt = Date.now();
     if (video.paused) video.play();
     updateDisplay();
+  }
+
+  function resetRepeatCount() {
+    repeatCount = 0;
+    const el = document.getElementById('yrt-repeat-count');
+    if (el) el.textContent = '0';
   }
 
   function updateDisplay() {
@@ -226,6 +291,14 @@
     document.getElementById('yrt-time').textContent = `${formatTime(cap.start)} - ${formatTime(cap.end)}`;
     document.getElementById('yrt-prev').disabled = currentIndex === 0;
     document.getElementById('yrt-next').disabled = currentIndex === captions.length - 1;
+
+    const prevEl = document.getElementById('yrt-caption-prev');
+    const currEl = document.getElementById('yrt-caption-current');
+    const nextEl = document.getElementById('yrt-caption-next');
+
+    prevEl.textContent = currentIndex > 0 ? captions[currentIndex - 1].text : '';
+    currEl.textContent = cap.text;
+    nextEl.textContent = currentIndex < captions.length - 1 ? captions[currentIndex + 1].text : '';
   }
 
   function findCaptionIndex(time) {
@@ -244,17 +317,32 @@
     const time = video.currentTime;
     const cap = captions[currentIndex];
 
-    if (time < cap.start - 0.5 || time > cap.end + 0.5) {
-      const newIdx = findCaptionIndex(time);
-      if (newIdx !== currentIndex) {
-        currentIndex = newIdx;
+    // Reached end of current segment
+    if (time >= cap.end - 0.05) {
+      if (looping) {
+        repeatCount++;
+        document.getElementById('yrt-repeat-count').textContent = repeatCount;
+        video.currentTime = cap.start;
+        return;
+      }
+      // Not looping: advance to next
+      if (currentIndex < captions.length - 1) {
+        currentIndex++;
+        resetRepeatCount();
         updateDisplay();
+        return;
       }
     }
 
-    if (time >= cap.end - 0.05) {
-      if (looping) {
-        video.currentTime = cap.start;
+    // Sync: if time is outside current caption (manual seek, etc.)
+    // Skip sync briefly after programmatic seek to avoid race condition
+    if (Date.now() - seekedAt < 300) return;
+    if (time < cap.start || time >= cap.end) {
+      const newIdx = findCaptionIndex(time);
+      if (newIdx !== currentIndex) {
+        currentIndex = newIdx;
+        resetRepeatCount();
+        updateDisplay();
       }
     }
   }
@@ -267,6 +355,7 @@
     if (!captions.length) return;
 
     isActive = true;
+    localStorage.setItem('yrt-active', '1');
     currentIndex = findCaptionIndex(video.currentTime);
     createPanel();
     updateDisplay();
@@ -276,6 +365,7 @@
 
   function deactivate() {
     isActive = false;
+    localStorage.setItem('yrt-active', '0');
     if (pollTimer) clearInterval(pollTimer);
     if (panel) panel.remove();
     panel = null;
@@ -311,9 +401,19 @@
 
     const navObserver = new MutationObserver(() => {
       if (location.href !== lastUrl) {
+        const wasActive = isActive || localStorage.getItem('yrt-active') === '1';
         lastUrl = location.href;
-        deactivate();
-        setTimeout(injectButton, 2000);
+        if (isActive) {
+          isActive = false;
+          if (pollTimer) clearInterval(pollTimer);
+          if (panel) panel.remove();
+          panel = null;
+          document.removeEventListener('keydown', handleKeydown);
+        }
+        setTimeout(() => {
+          injectButton();
+          if (wasActive) activate();
+        }, 2000);
       }
     });
 
@@ -326,6 +426,9 @@
         clearInterval(waitForPlayer);
         injectButton();
         watchNavigation();
+        if (localStorage.getItem('yrt-active') === '1') {
+          activate();
+        }
       }
     }, 1000);
   }

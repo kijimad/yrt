@@ -1,0 +1,17 @@
+{
+  "name": "yrt",
+  "version": "1.0.0",
+  "description": "",
+  "main": "content.js",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "keywords": [],
+  "author": "Kijima Daigo <norimaking777@gmail.com> (https://github.com/kijimad)",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "happy-dom": "^20.9.0",
+    "vitest": "^4.1.6"
+  }
+}

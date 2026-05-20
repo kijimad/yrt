@@ -2,7 +2,7 @@
   position: fixed;
   bottom: 80px;
   right: 20px;
-  width: 260px;
+  width: 480px;
   background: #1a1a2e;
   border: 1px solid #3a3a5c;
   border-radius: 12px;
@@ -59,6 +59,37 @@
   color: #6c7aa0;
   margin-bottom: 6px;
   font-variant-numeric: tabular-nums;
+}
+
+.yrt-captions {
+  margin-bottom: 6px;
+  background: #0f0f23;
+  border-radius: 6px;
+  border: 1px solid #2a2a4a;
+  padding: 6px 0;
+}
+
+.yrt-caption-row {
+  padding: 4px 12px;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.yrt-caption-row:empty {
+  display: none;
+}
+
+.yrt-caption-prev,
+.yrt-caption-next {
+  font-size: 14px;
+  color: #555a70;
+}
+
+.yrt-caption-current {
+  font-size: 32px;
+  color: #f0f0f0;
+  padding: 8px 12px;
+  border-left: 3px solid #e94560;
 }
 
 .yrt-repeat-indicator {
