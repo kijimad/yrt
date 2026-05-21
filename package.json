@@ -1,17 +1,21 @@
 {
   "name": "yrt",
   "version": "1.0.0",
-  "description": "",
-  "main": "content.js",
+  "description": "YouTube Caption Repeater - Chrome extension for language learning",
+  "type": "module",
   "scripts": {
-    "test": "vitest run"
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "check": "tsc --noEmit && npm test"
   },
   "keywords": [],
   "author": "Kijima Daigo <norimaking777@gmail.com> (https://github.com/kijimad)",
   "license": "ISC",
-  "type": "commonjs",
   "devDependencies": {
+    "@tsconfig/strictest": "^2.0.8",
     "happy-dom": "^20.9.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
     "vitest": "^4.1.6"
   }
 }

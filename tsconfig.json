@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "outDir": "dist",
+    "allowJs": true,
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "target": "ES2020",
+    "module": "ES2020",
+    "moduleResolution": "bundler",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "types": ["vitest/globals"],
+    "erasableSyntaxOnly": false,
+    "exactOptionalPropertyTypes": false
+  },
+  "include": ["src"],
+  "extends": ["@tsconfig/strictest/tsconfig.json"]
+}

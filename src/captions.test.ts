@@ -1,17 +1,18 @@
 import { describe, test, expect } from 'vitest';
-import { mergeBySentence, parseSrv3, formatTime, findCaptionIndex } from './captions.js';
+import { mergeBySentence, parseSrv3, formatTime, findCaptionIndex } from './captions.ts';
+import type { Caption } from './captions.ts';
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+// -- helpers --
 
-function seg(start, end, text) {
+function seg(start: number, end: number, text: string): Caption {
   return { start, end, text };
 }
 
-function durations(segments) {
+function durations(segments: Caption[]): number[] {
   return segments.map((s) => +(s.end - s.start).toFixed(2));
 }
 
-function durationStats(segments) {
+function durationStats(segments: Caption[]): { min: number; max: number; avg: number; count: number } {
   const d = durations(segments);
   const min = Math.min(...d);
   const max = Math.max(...d);
@@ -19,7 +20,7 @@ function durationStats(segments) {
   return { min, max, avg, count: d.length };
 }
 
-// ── mergeBySentence basic behaviour ──────────────────────────────────────────
+// -- mergeBySentence basic behaviour --
 
 describe('mergeBySentence', () => {
   test('returns empty array for empty input', () => {
@@ -30,7 +31,7 @@ describe('mergeBySentence', () => {
     const input = [seg(0, 2, 'Hello.')];
     const result = mergeBySentence(input);
     expect(result).toHaveLength(1);
-    expect(result[0].text).toBe('Hello.');
+    expect(result[0]!.text).toBe('Hello.');
   });
 
   test('merges fragments until sentence end', () => {
@@ -41,9 +42,9 @@ describe('mergeBySentence', () => {
     ];
     const result = mergeBySentence(input);
     expect(result).toHaveLength(1);
-    expect(result[0].text).toBe('The quick brown fox jumps over the lazy dog.');
-    expect(result[0].start).toBe(0);
-    expect(result[0].end).toBe(4);
+    expect(result[0]!.text).toBe('The quick brown fox jumps over the lazy dog.');
+    expect(result[0]!.start).toBe(0);
+    expect(result[0]!.end).toBe(4);
   });
 
   test('splits at sentence boundaries', () => {
@@ -53,12 +54,9 @@ describe('mergeBySentence', () => {
       seg(4, 6, 'Third sentence.'),
     ];
     const result = mergeBySentence(input);
-    // Each ends with '.', so each is its own sentence.
-    // But step 2 merges short ones (< 3s), so first two merge.
     expect(result.length).toBeLessThanOrEqual(3);
-    // Every segment should be >= 3s (except possibly the last)
     for (let i = 0; i < result.length - 1; i++) {
-      expect(result[i].end - result[i].start).toBeGreaterThanOrEqual(3);
+      expect(result[i]!.end - result[i]!.start).toBeGreaterThanOrEqual(3);
     }
   });
 
@@ -69,8 +67,6 @@ describe('mergeBySentence', () => {
       seg(5, 8, 'Great news.'),
     ];
     const result = mergeBySentence(input);
-    // All end with sentence-ending punctuation
-    // Step 2 merges short ones
     expect(result.length).toBeGreaterThanOrEqual(1);
   });
 
@@ -80,31 +76,28 @@ describe('mergeBySentence', () => {
       seg(2, 5, 'Then she left.'),
     ];
     const result = mergeBySentence(input);
-    // ." matches sentenceEnd pattern, so these should split at step 1
-    expect(result).toHaveLength(1); // then merged at step 2 (first is < 3s)
-    expect(result[0].text).toContain('hello."');
-    expect(result[0].text).toContain('Then she left.');
+    expect(result).toHaveLength(1);
+    expect(result[0]!.text).toContain('hello."');
+    expect(result[0]!.text).toContain('Then she left.');
   });
 
   test('minimum duration merging works', () => {
     const input = [
-      seg(0, 1, 'Hi.'),      // 1s - too short
-      seg(1, 2, 'Hey.'),     // 1s - too short
-      seg(2, 3, 'Hello.'),   // 1s - too short
+      seg(0, 1, 'Hi.'),
+      seg(1, 2, 'Hey.'),
+      seg(2, 3, 'Hello.'),
       seg(3, 7, 'This is a longer sentence that takes four seconds.'),
     ];
     const result = mergeBySentence(input);
-    // Short sentences should be merged together until >= 3s
-    const firstDuration = result[0].end - result[0].start;
+    const firstDuration = result[0]!.end - result[0]!.start;
     expect(firstDuration).toBeGreaterThanOrEqual(3);
   });
 });
 
-// ── Real caption data: ASR (auto-generated) English ──────────────────────────
+// -- Real caption data: ASR (auto-generated) English --
 
 describe('mergeBySentence with real ASR English captions', () => {
-  // Simulates typical ASR output: short fragments, punctuation added by ASR
-  const asrEnglish = [
+  const asrEnglish: Caption[] = [
     seg(0.0, 1.2, "so today we're going to"),
     seg(1.2, 2.8, "talk about something really"),
     seg(2.8, 4.1, "important."),
@@ -130,26 +123,22 @@ describe('mergeBySentence with real ASR English captions', () => {
   test('produces segments with reasonable duration', () => {
     const result = mergeBySentence(asrEnglish);
     const stats = durationStats(result);
-
-    // No segment should be extremely short (< 3s except last)
     for (let i = 0; i < result.length - 1; i++) {
-      expect(result[i].end - result[i].start).toBeGreaterThanOrEqual(3);
+      expect(result[i]!.end - result[i]!.start).toBeGreaterThanOrEqual(3);
     }
-
-    // Max duration should be reasonable (not > 20s)
     expect(stats.max).toBeLessThan(20);
   });
 
   test('preserves total time span', () => {
     const result = mergeBySentence(asrEnglish);
-    expect(result[0].start).toBe(0.0);
-    expect(result[result.length - 1].end).toBe(30.5);
+    expect(result[0]!.start).toBe(0.0);
+    expect(result[result.length - 1]!.end).toBe(30.5);
   });
 
   test('segments are contiguous and ordered', () => {
     const result = mergeBySentence(asrEnglish);
     for (let i = 1; i < result.length; i++) {
-      expect(result[i].start).toBeGreaterThanOrEqual(result[i - 1].start);
+      expect(result[i]!.start).toBeGreaterThanOrEqual(result[i - 1]!.start);
     }
   });
 
@@ -161,11 +150,10 @@ describe('mergeBySentence with real ASR English captions', () => {
   });
 });
 
-// ── Real caption data: manually authored English subtitles ───────────────────
+// -- Real caption data: manually authored English subtitles --
 
 describe('mergeBySentence with manual English captions', () => {
-  // Manual subs tend to have complete sentences already, longer segments
-  const manualEnglish = [
+  const manualEnglish: Caption[] = [
     seg(0.5, 3.0, "Welcome to the program."),
     seg(3.5, 7.2, "Today we'll be discussing the impact of climate change on coastal cities."),
     seg(7.5, 10.0, "Rising sea levels threaten millions of people."),
@@ -178,8 +166,6 @@ describe('mergeBySentence with manual English captions', () => {
 
   test('keeps well-formed sentences mostly intact', () => {
     const result = mergeBySentence(manualEnglish);
-    // Manual subs already have good sentence boundaries
-    // Short ones get merged but that's OK
     const stats = durationStats(result);
     expect(stats.count).toBeGreaterThanOrEqual(3);
     expect(stats.count).toBeLessThanOrEqual(8);
@@ -188,16 +174,15 @@ describe('mergeBySentence with manual English captions', () => {
   test('minimum duration enforced', () => {
     const result = mergeBySentence(manualEnglish);
     for (let i = 0; i < result.length - 1; i++) {
-      expect(result[i].end - result[i].start).toBeGreaterThanOrEqual(3);
+      expect(result[i]!.end - result[i]!.start).toBeGreaterThanOrEqual(3);
     }
   });
 });
 
-// ── Real caption data: ASR with no punctuation ───────────────────────────────
+// -- Real caption data: ASR with no punctuation --
 
 describe('mergeBySentence with unpunctuated ASR', () => {
-  // Some ASR output lacks punctuation entirely
-  const noPunct = [
+  const noPunct: Caption[] = [
     seg(0, 2, "hello everyone welcome to"),
     seg(2, 4, "my channel today we are"),
     seg(4, 6, "going to learn about"),
@@ -212,20 +197,19 @@ describe('mergeBySentence with unpunctuated ASR', () => {
 
   test('without punctuation, splits at MAX_DURATION boundary', () => {
     const result = mergeBySentence(noPunct);
-    // No sentence-ending punctuation, but MAX_DURATION (8s) forces splits
     expect(result.length).toBeGreaterThan(1);
-    expect(result[0].start).toBe(0);
-    expect(result[result.length - 1].end).toBe(20);
+    expect(result[0]!.start).toBe(0);
+    expect(result[result.length - 1]!.end).toBe(20);
     for (const s of result) {
       expect(s.end - s.start).toBeLessThanOrEqual(10);
     }
   });
 });
 
-// ── Real caption data: mixed short and long sentences ────────────────────────
+// -- Real caption data: mixed short and long sentences --
 
 describe('mergeBySentence with mixed sentence lengths', () => {
-  const mixed = [
+  const mixed: Caption[] = [
     seg(0, 0.5, "Right."),
     seg(0.5, 1.0, "OK."),
     seg(1.0, 1.8, "So."),
@@ -241,9 +225,8 @@ describe('mergeBySentence with mixed sentence lengths', () => {
 
   test('very short utterances get absorbed', () => {
     const result = mergeBySentence(mixed);
-    // Single-word sentences like "Right." "OK." should be merged
     for (let i = 0; i < result.length - 1; i++) {
-      expect(result[i].end - result[i].start).toBeGreaterThanOrEqual(3);
+      expect(result[i]!.end - result[i]!.start).toBeGreaterThanOrEqual(3);
     }
   });
 
@@ -255,7 +238,7 @@ describe('mergeBySentence with mixed sentence lengths', () => {
   });
 });
 
-// ── parseSrv3 ────────────────────────────────────────────────────────────────
+// -- parseSrv3 --
 
 describe('parseSrv3', () => {
   test('parses srv3 XML with <p> elements', () => {
@@ -270,8 +253,7 @@ describe('parseSrv3', () => {
 
     const result = parseSrv3(xml);
     expect(result.length).toBeGreaterThanOrEqual(1);
-    // Verify timing conversion from ms to seconds
-    expect(result[0].start).toBe(0);
+    expect(result[0]!.start).toBe(0);
   });
 
   test('skips empty text and zero-duration segments', () => {
@@ -286,14 +268,12 @@ describe('parseSrv3', () => {
 </timedtext>`;
 
     const result = parseSrv3(xml);
-    // Only "Valid segment." should remain (after merge)
     const allText = result.map((s) => s.text).join(' ');
     expect(allText).toContain('Valid segment.');
     expect(allText).not.toContain('Zero duration.');
   });
 
   test('parses real-world srv3 fragment', () => {
-    // Actual srv3 structure from YouTube
     const xml = `<?xml version="1.0" encoding="utf-8"?>
 <timedtext format="3">
 <head>
@@ -314,8 +294,6 @@ describe('parseSrv3', () => {
 
     const result = parseSrv3(xml);
     expect(result.length).toBeGreaterThanOrEqual(1);
-
-    // All text should be preserved
     const allText = result.map((s) => s.text).join(' ');
     expect(allText).toContain('machine learning.');
     expect(allText).toContain('how it works.');
@@ -337,11 +315,10 @@ describe('parseSrv3', () => {
   });
 });
 
-// ── Duration uniformity analysis ─────────────────────────────────────────────
+// -- Duration uniformity analysis --
 
 describe('duration uniformity', () => {
-  // Lecture-style ASR: typical YouTube educational video
-  const lectureASR = [
+  const lectureASR: Caption[] = [
     seg(0, 1.5, "welcome back to the"),
     seg(1.5, 3.2, "channel everyone."),
     seg(3.2, 5.0, "in today's video"),
@@ -375,13 +352,6 @@ describe('duration uniformity', () => {
     const variance = d.reduce((sum, v) => sum + (v - avg) ** 2, 0) / d.length;
     const stddev = Math.sqrt(variance);
     const cv = stddev / avg;
-
-    // CV below 0.8 means durations are reasonably uniform
-    // (CV of 0 = perfectly uniform, CV of 1 = very variable)
-    console.log('Lecture ASR stats:', durationStats(result));
-    console.log('Durations:', d);
-    console.log(`CV: ${cv.toFixed(2)}`);
-
     expect(cv).toBeLessThan(1.0);
   });
 
@@ -389,15 +359,10 @@ describe('duration uniformity', () => {
     const result = mergeBySentence(lectureASR);
     const stats = durationStats(result);
     const ratio = stats.max / stats.min;
-
-    console.log('Max/min ratio:', ratio.toFixed(2));
-    // Ideally ratio should be under 5x
-    // This test documents the current behavior
     expect(ratio).toBeLessThan(10);
   });
 
-  // Conversation-style: dialogue with short exchanges
-  const conversation = [
+  const conversation: Caption[] = [
     seg(0, 1.0, "Hey how's it going?"),
     seg(1.0, 2.5, "Good thanks."),
     seg(2.5, 3.0, "You?"),
@@ -415,19 +380,13 @@ describe('duration uniformity', () => {
 
   test('conversation-style produces reasonable segments', () => {
     const result = mergeBySentence(conversation);
-    const stats = durationStats(result);
-
-    console.log('Conversation stats:', stats);
-    console.log('Durations:', durations(result));
-
-    // Minimum 3s except possibly last segment
     for (let i = 0; i < result.length - 1; i++) {
-      expect(result[i].end - result[i].start).toBeGreaterThanOrEqual(3);
+      expect(result[i]!.end - result[i]!.start).toBeGreaterThanOrEqual(3);
     }
   });
 });
 
-// ── Edge cases ───────────────────────────────────────────────────────────────
+// -- Edge cases --
 
 describe('edge cases', () => {
   test('single very long sentence gets split at MAX_DURATION', () => {
@@ -438,9 +397,7 @@ describe('edge cases', () => {
       seg(15, 20, "single massive segment which may not be ideal but is correct."),
     ];
     const result = mergeBySentence(input);
-    // MAX_DURATION forces split even without sentence-end punctuation
     expect(result.length).toBeGreaterThan(1);
-    // All text preserved
     const allText = result.map((s) => s.text).join(' ');
     expect(allText).toContain('beginning');
     expect(allText).toContain('correct.');
@@ -458,9 +415,8 @@ describe('edge cases', () => {
       seg(3.5, 4.0, "Done."),
     ];
     const result = mergeBySentence(input);
-    // All very short, should merge until >= 3s
     for (let i = 0; i < result.length - 1; i++) {
-      expect(result[i].end - result[i].start).toBeGreaterThanOrEqual(3);
+      expect(result[i]!.end - result[i]!.start).toBeGreaterThanOrEqual(3);
     }
   });
 
@@ -470,10 +426,6 @@ describe('edge cases', () => {
       seg(2, 5, "that maybe we should try something different."),
     ];
     const result = mergeBySentence(input);
-    // "..." does not end with just one . so depends on regex
-    // Current regex: /[.!?]["'\u201D\u2019)]*\s*$/
-    // "..." ends with "." so it IS matched
-    // This documents current behavior
     expect(result.length).toBeGreaterThanOrEqual(1);
   });
 
@@ -483,7 +435,6 @@ describe('edge cases', () => {
       seg(3, 6, "And this follows."),
     ];
     const result = mergeBySentence(input);
-    // ")." matches the sentenceEnd regex
     expect(result.length).toBeGreaterThanOrEqual(1);
   });
 
@@ -494,12 +445,9 @@ describe('edge cases', () => {
       seg(10, 14, "Another gap here."),
     ];
     const result = mergeBySentence(input);
-    // Step 2 merges first two because first is < 3s
-    // Step 3 tightens end times: each segment's end = next segment's start
-    // Last segment keeps its original end
-    expect(result[result.length - 1].end).toBe(14);
+    expect(result[result.length - 1]!.end).toBe(14);
     for (let i = 0; i < result.length - 1; i++) {
-      expect(result[i].end).toBe(result[i + 1].start);
+      expect(result[i]!.end).toBe(result[i + 1]!.start);
     }
   });
 
@@ -511,14 +459,12 @@ describe('edge cases', () => {
     ];
     const result = mergeBySentence(input);
     expect(result.length).toBeGreaterThanOrEqual(1);
-    // No crash, text preserved
     const allText = result.map((s) => s.text).join(' ');
     expect(allText).toContain('Overlapping start.');
     expect(allText).toContain('More overlap here.');
   });
 
   test('segment with only whitespace after trim is skipped in parseSrv3', () => {
-    // This tests the raw input side; mergeBySentence itself just gets what parseSrv3 gives
     const input = [seg(0, 4, "Real text here.")];
     const result = mergeBySentence(input);
     expect(result).toHaveLength(1);
@@ -530,111 +476,100 @@ describe('edge cases', () => {
       seg(3, 6, "That was a great year."),
     ];
     const result = mergeBySentence(input);
-    // "2024." ends with "." so it's a sentence boundary at step 1
-    // First segment is exactly 3s (not < 3), so step 2 does NOT merge
     expect(result).toHaveLength(2);
-    expect(result[0].text).toBe("2024.");
-    expect(result[1].text).toBe("That was a great year.");
+    expect(result[0]!.text).toBe("2024.");
+    expect(result[1]!.text).toBe("That was a great year.");
   });
 
   test('text with HTML entities from srv3', () => {
-    // parseSrv3 handles entities, but mergeBySentence gets plain text
     const input = [
       seg(0, 4, "Tom & Jerry are great."),
       seg(4, 8, "They've been around forever."),
     ];
     const result = mergeBySentence(input);
-    expect(result[0].text).toContain("Tom & Jerry");
+    expect(result[0]!.text).toContain("Tom & Jerry");
   });
 });
 
-// ── Japanese captions (language learning primary use case) ───────────────────
+// -- Japanese captions (language learning primary use case) --
 
 describe('mergeBySentence with Japanese captions', () => {
-  // Japanese uses 。！？ for sentence endings, NOT caught by current regex
-  const japaneseManual = [
-    seg(0, 3, "皆さんこんにちは。"),
-    seg(3, 6, "今日は料理の話をしましょう。"),
-    seg(6, 9, "まず材料を準備します。"),
-    seg(9, 12, "卵を三つ割ります。"),
-    seg(12, 15, "次にフライパンを温めます。"),
-    seg(15, 18, "油を少し入れてください。"),
+  const japaneseManual: Caption[] = [
+    seg(0, 3, "\u7686\u3055\u3093\u3053\u3093\u306B\u3061\u306F\u3002"),
+    seg(3, 6, "\u4ECA\u65E5\u306F\u6599\u7406\u306E\u8A71\u3092\u3057\u307E\u3057\u3087\u3046\u3002"),
+    seg(6, 9, "\u307E\u305A\u6750\u6599\u3092\u6E96\u5099\u3057\u307E\u3059\u3002"),
+    seg(9, 12, "\u5375\u3092\u4E09\u3064\u5272\u308A\u307E\u3059\u3002"),
+    seg(12, 15, "\u6B21\u306B\u30D5\u30E9\u30A4\u30D1\u30F3\u3092\u6E29\u3081\u307E\u3059\u3002"),
+    seg(15, 18, "\u6CB9\u3092\u5C11\u3057\u5165\u308C\u3066\u304F\u3060\u3055\u3044\u3002"),
   ];
 
-  test('Japanese 。 not matched by regex, but MAX_DURATION splits', () => {
+  test('Japanese \u3002 not matched by regex, but MAX_DURATION splits', () => {
     const result = mergeBySentence(japaneseManual);
-    // 。 is not matched, but MAX_DURATION (8s) forces splits in 18s of content
     expect(result.length).toBeGreaterThan(1);
     for (const s of result) {
       expect(s.end - s.start).toBeLessThanOrEqual(10);
     }
   });
 
-  // Japanese ASR typically has no punctuation at all
-  const japaneseASR = [
-    seg(0, 2, "えーと今日は"),
-    seg(2, 4, "プログラミングについて"),
-    seg(4, 6, "お話ししたいと思います"),
-    seg(6, 8, "まずPythonから"),
-    seg(8, 10, "始めましょう"),
-    seg(10, 12, "Pythonは簡単で"),
-    seg(12, 14, "とても人気があります"),
+  const japaneseASR: Caption[] = [
+    seg(0, 2, "\u3048\u30FC\u3068\u4ECA\u65E5\u306F"),
+    seg(2, 4, "\u30D7\u30ED\u30B0\u30E9\u30DF\u30F3\u30B0\u306B\u3064\u3044\u3066"),
+    seg(4, 6, "\u304A\u8A71\u3057\u3057\u305F\u3044\u3068\u601D\u3044\u307E\u3059"),
+    seg(6, 8, "\u307E\u305APython\u304B\u3089"),
+    seg(8, 10, "\u59CB\u3081\u307E\u3057\u3087\u3046"),
+    seg(10, 12, "Python\u306F\u7C21\u5358\u3067"),
+    seg(12, 14, "\u3068\u3066\u3082\u4EBA\u6C17\u304C\u3042\u308A\u307E\u3059"),
   ];
 
   test('Japanese ASR without punctuation splits at MAX_DURATION', () => {
     const result = mergeBySentence(japaneseASR);
-    // 14s total, MAX_DURATION forces split
     expect(result.length).toBeGreaterThan(1);
     for (const s of result) {
       expect(s.end - s.start).toBeLessThanOrEqual(10);
     }
   });
 
-  // Japanese with English punctuation (common in ASR)
-  const japaneseMixed = [
-    seg(0, 3, "Hello, 皆さん."),
-    seg(3, 6, "今日のトピックはAIです."),
-    seg(6, 9, "とても面白いですよ."),
-    seg(9, 12, "では始めましょう."),
+  const japaneseMixed: Caption[] = [
+    seg(0, 3, "Hello, \u7686\u3055\u3093."),
+    seg(3, 6, "\u4ECA\u65E5\u306E\u30C8\u30D4\u30C3\u30AF\u306FAI\u3067\u3059."),
+    seg(6, 9, "\u3068\u3066\u3082\u9762\u767D\u3044\u3067\u3059\u3088."),
+    seg(9, 12, "\u3067\u306F\u59CB\u3081\u307E\u3057\u3087\u3046."),
   ];
 
   test('Japanese with ASCII periods splits correctly', () => {
     const result = mergeBySentence(japaneseMixed);
-    // ASCII "." IS matched, so step 1 splits at sentence boundaries
-    // Step 2 merges short ones
     for (let i = 0; i < result.length - 1; i++) {
-      expect(result[i].end - result[i].start).toBeGreaterThanOrEqual(3);
+      expect(result[i]!.end - result[i]!.start).toBeGreaterThanOrEqual(3);
     }
   });
 });
 
-// ── Korean/Chinese captions ──────────────────────────────────────────────────
+// -- Korean/Chinese captions --
 
 describe('mergeBySentence with CJK captions', () => {
-  const korean = [
-    seg(0, 3, "안녕하세요."),
-    seg(3, 6, "오늘은 요리를 해볼게요."),
-    seg(6, 9, "재료를 준비해주세요."),
+  const korean: Caption[] = [
+    seg(0, 3, "\uC548\uB155\uD558\uC138\uC694."),
+    seg(3, 6, "\uC624\uB298\uC740 \uC694\uB9AC\uB97C \uD574\uBCFC\uAC8C\uC694."),
+    seg(6, 9, "\uC7AC\uB8CC\uB97C \uC900\uBE44\uD574\uC8FC\uC138\uC694."),
   ];
 
   test('Korean with ASCII periods works', () => {
     const result = mergeBySentence(korean);
     for (let i = 0; i < result.length - 1; i++) {
-      expect(result[i].end - result[i].start).toBeGreaterThanOrEqual(3);
+      expect(result[i]!.end - result[i]!.start).toBeGreaterThanOrEqual(3);
     }
   });
 
-  const chinese = [
-    seg(0, 2, "大家好"),
-    seg(2, 4, "今天我们来学习"),
-    seg(4, 6, "机器学习的基础知识"),
-    seg(6, 8, "首先我们需要了解"),
-    seg(8, 10, "什么是神经网络"),
+  const chinese: Caption[] = [
+    seg(0, 2, "\u5927\u5BB6\u597D"),
+    seg(2, 4, "\u4ECA\u5929\u6211\u4EEC\u6765\u5B66\u4E60"),
+    seg(4, 6, "\u673A\u5668\u5B66\u4E60\u7684\u57FA\u7840\u77E5\u8BC6"),
+    seg(6, 8, "\u9996\u5148\u6211\u4EEC\u9700\u8981\u4E86\u89E3"),
+    seg(8, 10, "\u4EC0\u4E48\u662F\u795E\u7ECF\u7F51\u7EDC"),
   ];
 
   test('Chinese without punctuation splits at MAX_DURATION', () => {
     const result = mergeBySentence(chinese);
-    // 10s total, MAX_DURATION (8s) forces a split
     expect(result.length).toBeGreaterThan(1);
     for (const s of result) {
       expect(s.end - s.start).toBeLessThanOrEqual(10);
@@ -642,11 +577,10 @@ describe('mergeBySentence with CJK captions', () => {
   });
 });
 
-// ── Large caption set (full video simulation) ────────────────────────────────
+// -- Large caption set (full video simulation) --
 
 describe('mergeBySentence with large caption set', () => {
-  // Simulate ~10 minutes of ASR captions (120 segments)
-  function generateLargeASR(count) {
+  function generateLargeASR(count: number): Caption[] {
     const sentences = [
       ["so the first thing", "we need to understand", "is how this works."],
       ["it's actually quite simple."],
@@ -657,10 +591,10 @@ describe('mergeBySentence with large caption set', () => {
       ["this is where it", "gets really interesting."],
       ["pay attention to", "this part because", "it's very important."],
     ];
-    const result = [];
+    const result: Caption[] = [];
     let t = 0;
     for (let i = 0; i < count; i++) {
-      const s = sentences[i % sentences.length];
+      const s = sentences[i % sentences.length]!;
       for (const frag of s) {
         const dur = 1.2 + Math.random() * 1.5;
         result.push(seg(+t.toFixed(2), +(t + dur).toFixed(2), frag));
@@ -694,15 +628,15 @@ describe('mergeBySentence with large caption set', () => {
   test('segments are ordered', () => {
     const result = mergeBySentence(largeASR);
     for (let i = 1; i < result.length; i++) {
-      expect(result[i].start).toBeGreaterThanOrEqual(result[i - 1].start);
+      expect(result[i]!.start).toBeGreaterThanOrEqual(result[i - 1]!.start);
     }
   });
 });
 
-// ── Rapid speaker changes (podcast/interview) ───────────────────────────────
+// -- Rapid speaker changes (podcast/interview) --
 
 describe('mergeBySentence with rapid speaker changes', () => {
-  const interview = [
+  const interview: Caption[] = [
     seg(0, 2.5, "So tell me about your background."),
     seg(2.5, 5.0, "Sure I grew up in Tokyo."),
     seg(5.0, 5.8, "Interesting."),
@@ -724,23 +658,20 @@ describe('mergeBySentence with rapid speaker changes', () => {
 
   test('short interviewer responses get merged', () => {
     const result = mergeBySentence(interview);
-    // "Interesting." "Right." "Makes sense." etc should be absorbed
     for (let i = 0; i < result.length - 1; i++) {
-      expect(result[i].end - result[i].start).toBeGreaterThanOrEqual(3);
+      expect(result[i]!.end - result[i]!.start).toBeGreaterThanOrEqual(3);
     }
   });
 
   test('reasonable segment count for interview', () => {
     const result = mergeBySentence(interview);
     const stats = durationStats(result);
-    console.log('Interview stats:', stats);
-    console.log('Interview durations:', durations(result));
     expect(stats.count).toBeGreaterThanOrEqual(3);
     expect(stats.count).toBeLessThanOrEqual(12);
   });
 });
 
-// ── formatTime ───────────────────────────────────────────────────────────────
+// -- formatTime --
 
 describe('formatTime', () => {
   test('formats zero', () => {
@@ -771,7 +702,7 @@ describe('formatTime', () => {
   });
 });
 
-// ── findCaptionIndex ─────────────────────────────────────────────────────────
+// -- findCaptionIndex --
 
 describe('findCaptionIndex', () => {
   const caps = [
@@ -791,15 +722,12 @@ describe('findCaptionIndex', () => {
   });
 
   test('returns next caption when in gap', () => {
-    // With gaps between segments
     const gapped = [
       seg(0, 3, "A."),
       seg(5, 8, "B."),
       seg(10, 13, "C."),
     ];
-    // time=4 is in gap between A and B, should find B (next one starting after 4)
     expect(findCaptionIndex(gapped, 4)).toBe(1);
-    // time=9 is in gap between B and C
     expect(findCaptionIndex(gapped, 9)).toBe(2);
   });
 
@@ -825,13 +753,12 @@ describe('findCaptionIndex', () => {
   });
 
   test('exact boundary between captions', () => {
-    // At time=5 exactly, first caption ends (exclusive) and second starts (inclusive)
     expect(findCaptionIndex(caps, 5)).toBe(1);
     expect(findCaptionIndex(caps, 10)).toBe(2);
   });
 });
 
-// ── parseSrv3 additional tests ───────────────────────────────────────────────
+// -- parseSrv3 additional tests --
 
 describe('parseSrv3 additional', () => {
   test('handles HTML entities in text', () => {
@@ -856,38 +783,36 @@ describe('parseSrv3 additional', () => {
 </body>
 </timedtext>`;
     const result = parseSrv3(xml);
-    // Newlines should be replaced with spaces
-    expect(result[0].text).not.toContain('\n');
+    expect(result[0]!.text).not.toContain('\n');
   });
 
   test('handles Japanese srv3 captions', () => {
     const xml = `<?xml version="1.0" encoding="utf-8"?>
 <timedtext format="3">
 <body>
-  <p t="0" d="3000">皆さんこんにちは</p>
-  <p t="3000" d="3000">今日は日本語の勉強です</p>
-  <p t="6000" d="3000">頑張りましょう</p>
+  <p t="0" d="3000">\u7686\u3055\u3093\u3053\u3093\u306B\u3061\u306F</p>
+  <p t="3000" d="3000">\u4ECA\u65E5\u306F\u65E5\u672C\u8A9E\u306E\u52C9\u5F37\u3067\u3059</p>
+  <p t="6000" d="3000">\u9811\u5F35\u308A\u307E\u3057\u3087\u3046</p>
 </body>
 </timedtext>`;
     const result = parseSrv3(xml);
     const allText = result.map((s) => s.text).join(' ');
-    expect(allText).toContain('皆さんこんにちは');
-    expect(allText).toContain('頑張りましょう');
+    expect(allText).toContain('\u7686\u3055\u3093\u3053\u3093\u306B\u3061\u306F');
+    expect(allText).toContain('\u9811\u5F35\u308A\u307E\u3057\u3087\u3046');
   });
 
   test('handles many consecutive short segments', () => {
     let body = '';
     for (let i = 0; i < 50; i++) {
-      body += `  <p t="${i * 500}" d="500">word${i}.</p>\n`;
+      body += `  <p t="${String(i * 500)}" d="500">word${String(i)}.</p>\n`;
     }
     const xml = `<?xml version="1.0" encoding="utf-8"?>
 <timedtext format="3"><body>\n${body}</body></timedtext>`;
     const result = parseSrv3(xml);
-    // 50 x 0.5s segments, each with ".", merged by min duration
     expect(result.length).toBeGreaterThan(0);
-    expect(result.length).toBeLessThan(50); // must have merged some
+    expect(result.length).toBeLessThan(50);
     for (let i = 0; i < result.length - 1; i++) {
-      expect(result[i].end - result[i].start).toBeGreaterThanOrEqual(3);
+      expect(result[i]!.end - result[i]!.start).toBeGreaterThanOrEqual(3);
     }
   });
 
@@ -899,7 +824,7 @@ describe('parseSrv3 additional', () => {
 </body>
 </timedtext>`;
     const result = parseSrv3(xml);
-    expect(result[0].start).toBeCloseTo(1.234, 3);
-    expect(result[0].end).toBeCloseTo(6.912, 3);
+    expect(result[0]!.start).toBeCloseTo(1.234, 3);
+    expect(result[0]!.end).toBeCloseTo(6.912, 3);
   });
 });
