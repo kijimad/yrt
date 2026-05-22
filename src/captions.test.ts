@@ -198,16 +198,12 @@ describe('mergeBySentence with unpunctuated ASR', () => {
     seg(18, 20, "ten minutes"),
   ];
 
-  test('without punctuation, splits at MAX_WORDS boundary', () => {
+  test('without punctuation, merges into single segment', () => {
     const result = mergeBySentence(noPunct);
     expect(result[0]!.start).toBe(0);
     expect(result[result.length - 1]!.end).toBe(20);
-    // With 20 words total and MAX_WORDS=18, may split into two
-    // but MIN_WORDS check in step 2 may still merge
-    for (const s of result) {
-      const words = s.text.split(/\s+/).length;
-      expect(words).toBeLessThanOrEqual(18);
-    }
+    // No splitting — all unpunctuated text stays merged
+    expect(result).toHaveLength(1);
   });
 });
 
@@ -413,12 +409,9 @@ describe('mergeBySentence with long unpunctuated ASR', () => {
     seg(38, 40, "the server you want"),
   ];
 
-  test('splits at MAX_WORDS when no punctuation exists', () => {
+  test('keeps unpunctuated text as single segment', () => {
     const result = mergeBySentence(longNoPunct);
-    expect(result.length).toBeGreaterThan(1);
-    for (const s of result) {
-      expect(s.text.split(/\s+/).length).toBeLessThanOrEqual(18);
-    }
+    expect(result).toHaveLength(1);
   });
 
   test('no text is lost', () => {
@@ -479,7 +472,7 @@ describe('parseSrv3', () => {
 </body>
 </timedtext>`;
 
-    const result = parseSrv3(xml);
+    const result = parseSrv3(xml)._unsafeUnwrap();
     expect(result.length).toBeGreaterThanOrEqual(1);
     expect(result[0]!.start).toBe(0);
   });
@@ -495,7 +488,7 @@ describe('parseSrv3', () => {
 </body>
 </timedtext>`;
 
-    const result = parseSrv3(xml);
+    const result = parseSrv3(xml)._unsafeUnwrap();
     const allText = result.map((s) => s.text).join(' ');
     expect(allText).toContain('Valid segment.');
     expect(allText).not.toContain('Zero duration.');
@@ -520,7 +513,7 @@ describe('parseSrv3', () => {
 </body>
 </timedtext>`;
 
-    const result = parseSrv3(xml);
+    const result = parseSrv3(xml)._unsafeUnwrap();
     expect(result.length).toBeGreaterThanOrEqual(1);
     const allText = result.map((s) => s.text).join(' ');
     expect(allText).toContain('machine learning.');
@@ -536,7 +529,7 @@ describe('parseSrv3', () => {
 </body>
 </timedtext>`;
 
-    const result = parseSrv3(xml);
+    const result = parseSrv3(xml)._unsafeUnwrap();
     const allText = result.map((s) => s.text).join(' ');
     expect(allText).toContain('Hello');
     expect(allText).toContain('world.');
@@ -633,7 +626,7 @@ describe('edge cases', () => {
     expect(result[0]!.text).toContain('correct.');
   });
 
-  test('long unpunctuated text gets force-split', () => {
+  test('long unpunctuated text stays as single segment', () => {
     const input = [
       seg(0, 5, "this is a very long stream of text without any punctuation"),
       seg(5, 10, "that keeps going and going through multiple segments"),
@@ -641,10 +634,9 @@ describe('edge cases', () => {
       seg(15, 20, "without any pauses or sentence endings at all"),
     ];
     const result = mergeBySentence(input);
-    expect(result.length).toBeGreaterThan(1);
-    for (const s of result) {
-      expect(s.text.split(/\s+/).length).toBeLessThanOrEqual(18);
-    }
+    expect(result).toHaveLength(1);
+    expect(result[0]!.start).toBe(0);
+    expect(result[0]!.end).toBe(20);
   });
 
   test('all single-word segments get merged until MIN_WORDS', () => {
@@ -1008,7 +1000,7 @@ describe('parseSrv3 additional', () => {
   <p t="4000" d="4000">It&apos;s a classic show.</p>
 </body>
 </timedtext>`;
-    const result = parseSrv3(xml);
+    const result = parseSrv3(xml)._unsafeUnwrap();
     const allText = result.map((s) => s.text).join(' ');
     expect(allText).toContain('Tom & Jerry');
     expect(allText).toContain("It's a classic");
@@ -1021,7 +1013,7 @@ describe('parseSrv3 additional', () => {
   <p t="0" d="5000">First line\nSecond line.</p>
 </body>
 </timedtext>`;
-    const result = parseSrv3(xml);
+    const result = parseSrv3(xml)._unsafeUnwrap();
     expect(result[0]!.text).not.toContain('\n');
   });
 
@@ -1034,7 +1026,7 @@ describe('parseSrv3 additional', () => {
   <p t="6000" d="3000">\u9811\u5F35\u308A\u307E\u3057\u3087\u3046</p>
 </body>
 </timedtext>`;
-    const result = parseSrv3(xml);
+    const result = parseSrv3(xml)._unsafeUnwrap();
     const allText = result.map((s) => s.text).join(' ');
     expect(allText).toContain('\u7686\u3055\u3093\u3053\u3093\u306B\u3061\u306F');
     expect(allText).toContain('\u9811\u5F35\u308A\u307E\u3057\u3087\u3046');
@@ -1047,7 +1039,7 @@ describe('parseSrv3 additional', () => {
     }
     const xml = `<?xml version="1.0" encoding="utf-8"?>
 <timedtext format="3"><body>\n${body}</body></timedtext>`;
-    const result = parseSrv3(xml);
+    const result = parseSrv3(xml)._unsafeUnwrap();
     expect(result.length).toBeGreaterThan(0);
     expect(result.length).toBeLessThan(50);
     // Each segment should have at least MIN_WORDS (except last)
@@ -1063,7 +1055,7 @@ describe('parseSrv3 additional', () => {
   <p t="1234" d="5678">Precise timing.</p>
 </body>
 </timedtext>`;
-    const result = parseSrv3(xml);
+    const result = parseSrv3(xml)._unsafeUnwrap();
     expect(result[0]!.start).toBeCloseTo(1.234, 3);
     expect(result[0]!.end).toBeCloseTo(6.912, 3);
   });

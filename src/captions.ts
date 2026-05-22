@@ -1,3 +1,5 @@
+import { ok, err, type Result } from 'neverthrow';
+
 export interface Caption {
   start: number;
   end: number;
@@ -20,38 +22,8 @@ const SENTENCE_END = /[.!?]["'\u201D\u2019)]*\s*$/;
 const MIN_WORDS = 5;
 const MAX_WORDS = 18;
 
-// Split a single segment at internal sentence boundaries
-// e.g. "Hello world. This is a test." → ["Hello world.", "This is a test."]
-const INTERNAL_SPLIT = /(?<=[.!?]["'\u201D\u2019)]*)\s+(?=[A-Z])/;
-
-function splitInternalSentences(raw: Caption[]): Caption[] {
-  const result: Caption[] = [];
-  for (const seg of raw) {
-    const parts = seg.text.split(INTERNAL_SPLIT);
-    if (parts.length <= 1) {
-      result.push(seg);
-      continue;
-    }
-    const totalLen = seg.text.length;
-    const totalDur = seg.end - seg.start;
-    let charOffset = 0;
-    for (let j = 0; j < parts.length; j++) {
-      const part = parts[j]!;
-      const start = seg.start + (charOffset / totalLen) * totalDur;
-      charOffset += part.length;
-      const end = j === parts.length - 1 ? seg.end : seg.start + (charOffset / totalLen) * totalDur;
-      charOffset += 1; // space between parts
-      result.push({ start, end, text: part });
-    }
-  }
-  return result;
-}
-
 export function mergeBySentence(raw: Caption[]): Caption[] {
   if (raw.length === 0) return [];
-
-  // Phase 0: split raw segments that contain multiple sentences
-  raw = splitInternalSentences(raw);
 
   // Phase 1: group raw segments into sentences (split at sentence-ending punctuation)
   const sentences: Caption[] = [];
@@ -116,44 +88,12 @@ export function mergeBySentence(raw: Caption[]): Caption[] {
   }
   merged.push(acc);
 
-  // Phase 3: force-split segments that exceed MAX_WORDS
-  const split: Caption[] = [];
-  for (const seg of merged) {
-    if (wordCount(seg.text) <= MAX_WORDS) {
-      split.push(seg);
-      continue;
-    }
-    // Try splitting at internal sentence boundaries
-    const subSentences = splitInternalSentences([seg]);
-    if (subSentences.length > 1) {
-      // Multiple sentences — re-merge through full algorithm
-      const reMerged = mergeBySentence(subSentences);
-      split.push(...reMerged);
-    } else if (SENTENCE_END.test(seg.text)) {
-      // Single complete sentence — keep intact even if long
-      split.push(seg);
-    } else {
-      // Unpunctuated stream — split at MAX_WORDS
-      const words = seg.text.split(/\s+/);
-      let start = seg.start;
-      const totalDur = seg.end - seg.start;
-      const totalWords = words.length;
-      for (let j = 0; j < totalWords; j += MAX_WORDS) {
-        const chunk = words.slice(j, j + MAX_WORDS);
-        const frac = chunk.length / totalWords;
-        const end = j + MAX_WORDS >= totalWords ? seg.end : start + totalDur * frac;
-        split.push({ start, end, text: chunk.join(' ') });
-        start = end;
-      }
-    }
+  // Phase 3: tighten end times — set each segment's end to the next segment's start
+  for (let i = 0; i < merged.length - 1; i++) {
+    merged[i]!.end = merged[i + 1]!.start;
   }
 
-  // Phase 4: tighten end times — set each segment's end to the next segment's start
-  for (let i = 0; i < split.length - 1; i++) {
-    split[i]!.end = split[i + 1]!.start;
-  }
-
-  return split;
+  return merged;
 }
 
 function lookaheadWords(sentences: Caption[], fromIdx: number): number {
@@ -182,10 +122,20 @@ export function findCaptionIndex(captions: Caption[], time: number): number {
   return captions.length - 1;
 }
 
-export function parseSrv3(xml: string): Caption[] {
+export function parseSrv3(xml: string): Result<Caption[], string> {
   const parser = new DOMParser();
   const doc = parser.parseFromString(xml, 'text/xml');
+
+  const parseError = doc.querySelector('parsererror');
+  if (parseError) {
+    return err(`XML parse error: ${parseError.textContent ?? 'unknown'}`);
+  }
+
   const paragraphs = doc.querySelectorAll('body p');
+  if (paragraphs.length === 0) {
+    return err('No caption paragraphs found in XML');
+  }
+
   const raw: Caption[] = [];
   paragraphs.forEach((p) => {
     const tMs = parseInt(p.getAttribute('t') ?? '0', 10);
@@ -197,5 +147,10 @@ export function parseSrv3(xml: string): Caption[] {
       raw.push({ start, end, text });
     }
   });
-  return mergeBySentence(raw);
+
+  if (raw.length === 0) {
+    return err('No valid caption segments found');
+  }
+
+  return ok(mergeBySentence(raw));
 }

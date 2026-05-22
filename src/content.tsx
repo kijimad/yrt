@@ -2,6 +2,7 @@ declare const chrome: { runtime: { getURL: (path: string) => string } };
 
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
+import { err, type Result } from 'neverthrow';
 import { parseSrv3, findCaptionIndex } from './captions.ts';
 import type { Caption } from './captions.ts';
 import { Panel } from './Panel.tsx';
@@ -61,7 +62,7 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function loadCaptions(): Promise<Caption[]> {
+async function loadCaptions(): Promise<Result<Caption[], string>> {
   let { tracks, xml } = await requestCaptions();
   console.log('[YRT] Caption tracks:', tracks.length, 'XML length:', xml.length);
 
@@ -77,8 +78,7 @@ async function loadCaptions(): Promise<Caption[]> {
     return parseSrv3(xml);
   }
 
-  console.warn('[YRT] No caption XML captured');
-  return [];
+  return err('No caption XML captured');
 }
 
 function renderPanel(): void {
@@ -117,7 +117,13 @@ async function activate(): Promise<void> {
     return;
   }
 
-  captions = await loadCaptions();
+  const result = await loadCaptions();
+  if (result.isErr()) {
+    console.warn('[YRT]', result.error);
+    return;
+  }
+
+  captions = result.value;
   console.log('[YRT] Loaded captions:', captions.length);
   if (captions.length === 0) {
     console.warn('[YRT] No captions found — panel will not open');

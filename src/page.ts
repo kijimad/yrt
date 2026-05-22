@@ -1,3 +1,5 @@
+import { ok, err, type Result } from 'neverthrow';
+
 export {};
 
 declare global {
@@ -81,12 +83,12 @@ XMLHttpRequest.prototype.send = function (...args: unknown[]) {
   return (originalXHRSend as Function).apply(this, args);
 };
 
-function getTracks(): CaptionTrack[] | null {
+function getTracks(): Result<CaptionTrack[], string> {
   // Method 1: ytInitialPlayerResponse
   try {
     const resp = window.ytInitialPlayerResponse;
     if (resp?.captions) {
-      return resp.captions.playerCaptionsTracklistRenderer.captionTracks;
+      return ok(resp.captions.playerCaptionsTracklistRenderer.captionTracks);
     }
   } catch {}
 
@@ -96,7 +98,7 @@ function getTracks(): CaptionTrack[] | null {
     if (player?.getPlayerResponse) {
       const resp = player.getPlayerResponse();
       if (resp?.captions) {
-        return resp.captions.playerCaptionsTracklistRenderer.captionTracks;
+        return ok(resp.captions.playerCaptionsTracklistRenderer.captionTracks);
       }
     }
   } catch {}
@@ -109,16 +111,16 @@ function getTracks(): CaptionTrack[] | null {
       if (txt?.includes('captionTracks')) {
         const match = txt.match(/"captionTracks":(\[.*?\])\s*,\s*"/);
         if (match) {
-          return JSON.parse(match[1]!) as CaptionTrack[];
+          return ok(JSON.parse(match[1]!) as CaptionTrack[]);
         }
       }
     }
   } catch {}
 
-  return null;
+  return err('No caption tracks found');
 }
 
-async function fetchCaptionXml(tracks: CaptionTrack[]): Promise<string> {
+async function fetchCaptionXml(tracks: CaptionTrack[]): Promise<Result<string, string>> {
   const track = tracks.find((t) => t.kind !== 'asr') ?? tracks[0]!;
   let url = track.baseUrl;
   url = url.replace(/([?&])fmt=[^&]*/, '$1fmt=srv3');
@@ -129,35 +131,41 @@ async function fetchCaptionXml(tracks: CaptionTrack[]): Promise<string> {
   try {
     const resp = await originalFetch(url);
     if (!resp.ok) {
-      console.log('[YRT page.js] fetch status:', resp.status);
-      return '';
+      return err(`fetch status: ${resp.status}`);
     }
-    return await resp.text();
-  } catch (err: unknown) {
-    console.error('[YRT page.js] fetch error:', err);
-    return '';
+    const text = await resp.text();
+    if (text.length === 0) {
+      return err('Empty response');
+    }
+    return ok(text);
+  } catch (e: unknown) {
+    return err(`fetch error: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
 window.addEventListener('message', (e: MessageEvent) => {
   if (e.data && e.data.type === 'yrt-request-captions') {
     void (async () => {
-      const tracks = getTracks();
-      console.log('[YRT page.js] Tracks:', tracks ? tracks.length : 0, 'Captured XML length:', capturedXml.length);
+      const tracksResult = getTracks();
+      const tracks = tracksResult.isOk() ? tracksResult.value : [];
+      console.log('[YRT page.js] Tracks:', tracks.length, 'Captured XML length:', capturedXml.length);
 
       // Use intercepted XML if available, otherwise fetch directly
       let xml = capturedXml;
-      if (xml.length === 0 && tracks && tracks.length > 0) {
+      if (xml.length === 0 && tracks.length > 0) {
         console.log('[YRT page.js] No intercepted XML, fetching directly...');
-        xml = await fetchCaptionXml(tracks);
-        if (xml.length > 0) {
+        const fetchResult = await fetchCaptionXml(tracks);
+        if (fetchResult.isOk()) {
+          xml = fetchResult.value;
           capturedXml = xml;
+        } else {
+          console.log('[YRT page.js]', fetchResult.error);
         }
       }
 
       window.postMessage({
         type: 'yrt-caption-tracks',
-        tracks: tracks ?? [],
+        tracks,
         xml,
       }, '*');
     })();
