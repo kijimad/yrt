@@ -30,6 +30,7 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
 
   const panelRef = useRef<HTMLDivElement>(null);
   const seekedAtRef = useRef(0);
+  const programmaticSeekRef = useRef(false);
   const currentIndexRef = useRef(currentIndex);
   const loopingRef = useRef(looping);
   const repeatCountRef = useRef(repeatCount);
@@ -42,6 +43,7 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
   const seekToCaption = useCallback((idx: number) => {
     const cap = captions[idx];
     if (!cap) return;
+    programmaticSeekRef.current = true;
     video.currentTime = cap.start;
     seekedAtRef.current = Date.now();
     if (video.paused) void video.play();
@@ -105,6 +107,11 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
       seekedAtRef.current = Date.now();
     };
     const onSeeked = () => {
+      // Skip resync for programmatic seeks (goNext/goPrev/loop)
+      if (programmaticSeekRef.current) {
+        programmaticSeekRef.current = false;
+        return;
+      }
       // After user seek completes, sync to the new caption
       const time = video.currentTime;
       let newIdx = captions.length - 1;
@@ -140,6 +147,7 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
         if (loopingRef.current) {
           const newCount = repeatCountRef.current + 1;
           setRepeatCount(newCount);
+          programmaticSeekRef.current = true;
           seekedAtRef.current = Date.now();
           video.currentTime = cap.start;
           return;
