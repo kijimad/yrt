@@ -28,20 +28,27 @@ function chromeExtensionBuild() {
 
       // Copy static files
       cpSync('manifest.json', 'dist/manifest.json');
-      cpSync('styles.css', 'dist/styles.css');
       cpSync('icons', 'dist/icons', { recursive: true });
     },
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   test: {
     globals: true,
     environment: 'happy-dom',
+    snapshotSerializers: [],
+    resolveSnapshotPath: (testPath: string, snapExtension: string) =>
+      testPath.replace(/\.test\.ts$/, snapExtension),
   },
+  define: command === 'build' ? {
+    'process.env.NODE_ENV': JSON.stringify('production'),
+    'process.env': JSON.stringify({}),
+    'process.emit': 'undefined',
+  } : undefined,
   build: {
     lib: {
-      entry: 'src/content.ts',
+      entry: 'src/content.tsx',
       formats: ['iife'],
       name: 'content',
       fileName: () => 'content.js',
@@ -50,4 +57,4 @@ export default defineConfig({
     emptyOutDir: true,
   },
   plugins: [chromeExtensionBuild()],
-});
+}));

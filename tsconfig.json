@@ -10,7 +10,8 @@
     "module": "ES2020",
     "moduleResolution": "bundler",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "types": ["vitest/globals"],
+    "types": ["vitest/globals", "node"],
+    "jsx": "react-jsx",
     "erasableSyntaxOnly": false,
     "exactOptionalPropertyTypes": false
   },
