@@ -23,6 +23,12 @@ function chromeExtensionBuild() {
           },
           outDir: 'dist',
           emptyOutDir: false,
+          rollupOptions: {
+            onwarn(warning, warn) {
+              if (warning.code === 'MODULE_LEVEL_DIRECTIVE') return;
+              warn(warning);
+            },
+          },
         },
       });
 
@@ -55,6 +61,12 @@ export default defineConfig(({ command }) => ({
     },
     outDir: 'dist',
     emptyOutDir: true,
+    rollupOptions: {
+      onwarn(warning, warn) {
+        if (warning.code === 'MODULE_LEVEL_DIRECTIVE') return;
+        warn(warning);
+      },
+    },
   },
   plugins: [chromeExtensionBuild()],
 }));
