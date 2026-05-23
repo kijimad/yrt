@@ -3,14 +3,11 @@ declare const chrome: { runtime: { getURL: (path: string) => string } };
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import { err, type Result } from 'neverthrow';
-import { parseSrv3, findCaptionIndex } from './captions.ts';
-import type { Caption } from './captions.ts';
+import { parseSrv3, findCaptionIndex, formatParseError } from './captions.ts';
+import type { Caption, ParseError } from './captions.ts';
+import { isYrtMessage } from './messages.ts';
+import type { RequestCaptions, CaptionTracksResponse } from './messages.ts';
 import { Panel } from './Panel.tsx';
-
-interface CaptionResponse {
-  tracks: { kind: string; baseUrl: string }[];
-  xml: string;
-}
 
 let container: HTMLDivElement | null = null;
 let reactRoot: Root | null = null;
@@ -18,31 +15,28 @@ let video: HTMLVideoElement | null = null;
 let captions: Caption[] = [];
 let isActive = false;
 
-function requestCaptions(): Promise<CaptionResponse> {
+function requestCaptions(): Promise<CaptionTracksResponse> {
   return new Promise((resolve) => {
     let resolved = false;
 
     function onMessage(e: MessageEvent): void {
-      if (e.data && e.data.type === 'yrt-caption-tracks') {
-        window.removeEventListener('message', onMessage);
-        if (!resolved) {
-          resolved = true;
-          resolve({
-            tracks: (e.data.tracks ?? []) as CaptionResponse['tracks'],
-            xml: (e.data.xml ?? '') as string,
-          });
-        }
+      if (!isYrtMessage(e.data) || e.data.type !== 'yrt-caption-tracks') return;
+      window.removeEventListener('message', onMessage);
+      if (!resolved) {
+        resolved = true;
+        resolve(e.data);
       }
     }
 
     window.addEventListener('message', onMessage);
-    window.postMessage({ type: 'yrt-request-captions' }, '*');
+    const request: RequestCaptions = { type: 'yrt-request-captions' };
+    window.postMessage(request, '*');
 
     setTimeout(() => {
       window.removeEventListener('message', onMessage);
       if (!resolved) {
         resolved = true;
-        resolve({ tracks: [], xml: '' });
+        resolve({ type: 'yrt-caption-tracks', tracks: [], xml: '' });
       }
     }, 5000);
   });
@@ -62,7 +56,18 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function loadCaptions(): Promise<Result<Caption[], string>> {
+type LoadError = ParseError | { kind: 'no-xml' };
+
+function formatLoadError(e: LoadError): string {
+  switch (e.kind) {
+    case 'no-xml': return 'No caption XML captured';
+    case 'xml-parse-error': return formatParseError(e);
+    case 'no-paragraphs': return formatParseError(e);
+    case 'no-segments': return formatParseError(e);
+  }
+}
+
+async function loadCaptions(): Promise<Result<Caption[], LoadError>> {
   let { tracks, xml } = await requestCaptions();
   console.log('[YRT] Caption tracks:', tracks.length, 'XML length:', xml.length);
 
@@ -78,22 +83,17 @@ async function loadCaptions(): Promise<Result<Caption[], string>> {
     return parseSrv3(xml);
   }
 
-  return err('No caption XML captured');
+  return err({ kind: 'no-xml' });
 }
 
 function renderPanel(): void {
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'yrt-container';
-    document.body.appendChild(container);
-    reactRoot = createRoot(container);
-  }
+  if (!video || !reactRoot) return;
 
-  reactRoot!.render(
+  reactRoot.render(
     <Panel
       captions={captions}
-      initialIndex={findCaptionIndex(captions, video!.currentTime)}
-      video={video!}
+      initialIndex={findCaptionIndex(captions, video.currentTime)}
+      video={video}
       onClose={deactivate}
     />
   );
@@ -119,7 +119,7 @@ async function activate(): Promise<void> {
 
   const result = await loadCaptions();
   if (result.isErr()) {
-    console.warn('[YRT]', result.error);
+    console.warn('[YRT]', formatLoadError(result.error));
     return;
   }
 
@@ -132,6 +132,14 @@ async function activate(): Promise<void> {
 
   isActive = true;
   localStorage.setItem('yrt-active', '1');
+
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'yrt-container';
+    document.body.appendChild(container);
+    reactRoot = createRoot(container);
+  }
+
   renderPanel();
 }
 

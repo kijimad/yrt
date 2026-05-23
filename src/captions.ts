@@ -1,5 +1,18 @@
 import { ok, err, type Result } from 'neverthrow';
 
+export type ParseError =
+  | { kind: 'xml-parse-error'; detail: string }
+  | { kind: 'no-paragraphs' }
+  | { kind: 'no-segments' };
+
+export function formatParseError(e: ParseError): string {
+  switch (e.kind) {
+    case 'xml-parse-error': return `XML parse error: ${e.detail}`;
+    case 'no-paragraphs': return 'No caption paragraphs found in XML';
+    case 'no-segments': return 'No valid caption segments found';
+  }
+}
+
 export interface Caption {
   start: number;
   end: number;
@@ -122,18 +135,18 @@ export function findCaptionIndex(captions: Caption[], time: number): number {
   return captions.length - 1;
 }
 
-export function parseSrv3(xml: string): Result<Caption[], string> {
+export function parseSrv3(xml: string): Result<Caption[], ParseError> {
   const parser = new DOMParser();
   const doc = parser.parseFromString(xml, 'text/xml');
 
   const parseError = doc.querySelector('parsererror');
   if (parseError) {
-    return err(`XML parse error: ${parseError.textContent ?? 'unknown'}`);
+    return err({ kind: 'xml-parse-error', detail: parseError.textContent ?? 'unknown' });
   }
 
   const paragraphs = doc.querySelectorAll('body p');
   if (paragraphs.length === 0) {
-    return err('No caption paragraphs found in XML');
+    return err({ kind: 'no-paragraphs' });
   }
 
   const raw: Caption[] = [];
@@ -149,7 +162,7 @@ export function parseSrv3(xml: string): Result<Caption[], string> {
   });
 
   if (raw.length === 0) {
-    return err('No valid caption segments found');
+    return err({ kind: 'no-segments' });
   }
 
   return ok(mergeBySentence(raw));

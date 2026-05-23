@@ -11,7 +11,7 @@ import {
   VStack,
 } from '@chakra-ui/react';
 import type { Caption } from './captions.ts';
-import { formatTime } from './captions.ts';
+import { formatTime, findCaptionIndex } from './captions.ts';
 
 interface PanelProps {
   captions: Caption[];
@@ -26,7 +26,7 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
   const [repeatCount, setRepeatCount] = useState(0);
   const [minimized, setMinimized] = useState(false);
   const [speedIdx, setSpeedIdx] = useState(0);
-  const speeds = [1, 0.75, 0.5, 0.25];
+  const speeds = [1, 0.75, 0.5, 0.25] as const;
 
   const panelRef = useRef<HTMLDivElement>(null);
   const seekedAtRef = useRef(0);
@@ -114,12 +114,7 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
       }
       // After user seek completes, sync to the new caption
       const time = video.currentTime;
-      let newIdx = captions.length - 1;
-      for (let i = 0; i < captions.length; i++) {
-        const c = captions[i]!;
-        if (time >= c.start && time < c.end) { newIdx = i; break; }
-        if (c.start > time) { newIdx = i; break; }
-      }
+      const newIdx = findCaptionIndex(captions, time);
       setCurrentIndex(newIdx);
       setRepeatCount(0);
     };
@@ -161,12 +156,7 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
 
       if (time < cap.start || time >= cap.end) {
         // Find matching caption
-        let newIdx = captions.length - 1;
-        for (let i = 0; i < captions.length; i++) {
-          const c = captions[i]!;
-          if (time >= c.start && time < c.end) { newIdx = i; break; }
-          if (c.start > time) { newIdx = i; break; }
-        }
+        const newIdx = findCaptionIndex(captions, time);
         if (newIdx !== idx) {
           setCurrentIndex(newIdx);
           setRepeatCount(0);
@@ -407,7 +397,7 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
                 onClick={() => {
                   const newIdx = (speedIdx + 1) % speeds.length;
                   setSpeedIdx(newIdx);
-                  video.playbackRate = speeds[newIdx]!;
+                  video.playbackRate = speeds[newIdx] ?? 1;
                 }}
               >
                 {speeds[speedIdx]}x
