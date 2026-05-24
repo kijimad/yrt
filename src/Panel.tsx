@@ -34,6 +34,9 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
   const currentIndexRef = useRef(currentIndex);
   const loopingRef = useRef(looping);
   const repeatCountRef = useRef(repeatCount);
+  // Store video in a ref so mutations don't trigger react-hooks/immutability
+  const videoRef = useRef(video);
+  useEffect(() => { videoRef.current = video; }, [video]);
 
   // Keep refs in sync
   useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
@@ -42,12 +45,14 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
 
   const seekToCaption = useCallback((idx: number) => {
     const cap = captions[idx];
-    if (!cap) return;
+    if (cap === undefined) return;
     programmaticSeekRef.current = true;
-    video.currentTime = cap.start;
+    videoRef.current.currentTime = cap.start;
     seekedAtRef.current = Date.now();
-    if (video.paused) void video.play();
-  }, [captions, video]);
+    if (videoRef.current.paused) {
+      void videoRef.current.play();
+    }
+  }, [captions]);
 
   const goNext = useCallback(() => {
     setCurrentIndex((prev) => {
@@ -98,31 +103,30 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
       }
     }
     document.addEventListener('keydown', handleKeydown);
-    return () => document.removeEventListener('keydown', handleKeydown);
+    return () => { document.removeEventListener('keydown', handleKeydown); };
   }, [goNext, goPrev, replay]);
 
   // Detect user seeks (seekbar) — sync to new position instead of looping back
   useEffect(() => {
-    const onSeeking = () => {
+    const v = videoRef.current;
+    const onSeeking = (): void => {
       seekedAtRef.current = Date.now();
     };
-    const onSeeked = () => {
-      // Skip resync for programmatic seeks (goNext/goPrev/loop)
+    const onSeeked = (): void => {
       if (programmaticSeekRef.current) {
         programmaticSeekRef.current = false;
         return;
       }
-      // After user seek completes, sync to the new caption
-      const time = video.currentTime;
+      const time = v.currentTime;
       const newIdx = findCaptionIndex(captions, time);
       setCurrentIndex(newIdx);
       setRepeatCount(0);
     };
-    video.addEventListener('seeking', onSeeking);
-    video.addEventListener('seeked', onSeeked);
+    v.addEventListener('seeking', onSeeking);
+    v.addEventListener('seeked', onSeeked);
     return () => {
-      video.removeEventListener('seeking', onSeeking);
-      video.removeEventListener('seeked', onSeeked);
+      v.removeEventListener('seeking', onSeeking);
+      v.removeEventListener('seeked', onSeeked);
     };
   }, [captions, video]);
 
@@ -130,13 +134,12 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
   useEffect(() => {
     const timer = setInterval(() => {
       if (captions.length === 0) return;
-      // Skip polling briefly after any seek (user or programmatic)
       if (Date.now() - seekedAtRef.current < 500) return;
 
-      const time = video.currentTime;
+      const time = videoRef.current.currentTime;
       const idx = currentIndexRef.current;
       const cap = captions[idx];
-      if (!cap) return;
+      if (cap === undefined) return;
 
       if (time >= cap.end - 0.05) {
         if (loopingRef.current) {
@@ -144,7 +147,7 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
           setRepeatCount(newCount);
           programmaticSeekRef.current = true;
           seekedAtRef.current = Date.now();
-          video.currentTime = cap.start;
+          videoRef.current.currentTime = cap.start;
           return;
         }
         if (idx < captions.length - 1) {
@@ -155,7 +158,6 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
       }
 
       if (time < cap.start || time >= cap.end) {
-        // Find matching caption
         const newIdx = findCaptionIndex(captions, time);
         if (newIdx !== idx) {
           setCurrentIndex(newIdx);
@@ -163,19 +165,19 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
         }
       }
     }, 100);
-    return () => clearInterval(timer);
+    return () => { clearInterval(timer); };
   }, [captions, video]);
 
   // Dragging
   useEffect(() => {
     const el = panelRef.current;
     const header = el?.querySelector('[data-drag-handle]') as HTMLElement | null;
-    if (!el || !header) return;
+    if (el === null || header === null) return;
 
     let dragging = false;
     let startX = 0, startY = 0, origX = 0, origY = 0;
 
-    const onMouseDown = (e: MouseEvent) => {
+    const onMouseDown = (e: MouseEvent): void => {
       if ((e.target as HTMLElement).tagName === 'BUTTON') return;
       dragging = true;
       startX = e.clientX;
@@ -186,15 +188,15 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
       e.preventDefault();
     };
 
-    const onMouseMove = (e: MouseEvent) => {
+    const onMouseMove = (e: MouseEvent): void => {
       if (!dragging) return;
-      el.style.left = origX + (e.clientX - startX) + 'px';
-      el.style.top = origY + (e.clientY - startY) + 'px';
+      el.style.left = String(origX + (e.clientX - startX)) + 'px';
+      el.style.top = String(origY + (e.clientY - startY)) + 'px';
       el.style.right = 'auto';
       el.style.bottom = 'auto';
     };
 
-    const onMouseUp = () => { dragging = false; };
+    const onMouseUp = (): void => { dragging = false; };
 
     header.addEventListener('mousedown', onMouseDown);
     document.addEventListener('mousemove', onMouseMove);
@@ -207,8 +209,8 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
   }, []);
 
   const cap = captions[currentIndex];
-  const prevCap = currentIndex > 0 ? captions[currentIndex - 1] : null;
-  const nextCap = currentIndex < captions.length - 1 ? captions[currentIndex + 1] : null;
+  const prevCap = currentIndex > 0 ? captions[currentIndex - 1] : undefined;
+  const nextCap = currentIndex < captions.length - 1 ? captions[currentIndex + 1] : undefined;
 
   return (
     <ChakraProvider value={defaultSystem}>
@@ -254,7 +256,7 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
               color="#6c7aa0"
               _hover={{ bg: '#3a3a5c', color: '#e0e0e0' }}
               borderRadius="4px"
-              onClick={() => setMinimized((m) => !m)}
+              onClick={() => { setMinimized((m) => !m); }}
             >
               _
             </IconButton>
@@ -277,18 +279,18 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
           <VStack gap="6px" p="10px" align="stretch">
             {/* Status bar */}
             <Flex justify="space-between" fontSize="11px" color="#6c7aa0" fontVariantNumeric="tabular-nums">
-              <Text>{cap ? `${currentIndex + 1} / ${captions.length}` : '-'}</Text>
-              <Text>{cap ? `${formatTime(cap.start)} - ${formatTime(cap.end)}` : '-'}</Text>
+              <Text>{cap !== undefined ? `${String(currentIndex + 1)} / ${String(captions.length)}` : '-'}</Text>
+              <Text>{cap !== undefined ? `${formatTime(cap.start)} - ${formatTime(cap.end)}` : '-'}</Text>
             </Flex>
 
             {/* Captions */}
             <Box bg="#0f0f23" borderRadius="6px" border="1px solid" borderColor="#2a2a4a" py="6px">
-              {prevCap && (
+              {prevCap !== undefined && (
                 <Text px="12px" py="4px" fontSize="14px" color="#555a70" lineHeight="1.5" wordBreak="break-word">
                   {prevCap.text}
                 </Text>
               )}
-              {cap && (
+              {cap !== undefined && (
                 <Text
                   px="12px"
                   py="8px"
@@ -302,7 +304,7 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
                   {cap.text}
                 </Text>
               )}
-              {nextCap && (
+              {nextCap !== undefined && (
                 <Text px="12px" py="4px" fontSize="14px" color="#555a70" lineHeight="1.5" wordBreak="break-word">
                   {nextCap.text}
                 </Text>
@@ -378,7 +380,7 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
                 fontSize="11px"
                 _hover={{ bg: '#2a2a50', color: '#a8b2d1' }}
                 _active={{ transform: 'scale(0.96)' }}
-                onClick={() => setLooping((l) => !l)}
+                onClick={() => { setLooping((l) => !l); }}
               >
                 Repeat: {looping ? 'ON' : 'OFF'}
               </Button>
@@ -397,7 +399,7 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
                 onClick={() => {
                   const newIdx = (speedIdx + 1) % speeds.length;
                   setSpeedIdx(newIdx);
-                  video.playbackRate = speeds[newIdx] ?? 1;
+                  videoRef.current.playbackRate = speeds[newIdx] ?? 1;
                 }}
               >
                 {speeds[speedIdx]}x

@@ -16,14 +16,24 @@ declare global {
   }
 }
 
-interface MoviePlayer extends HTMLElement {
-  getPlayerResponse?: () => {
-    captions?: {
-      playerCaptionsTracklistRenderer: {
-        captionTracks: CaptionTrack[];
-      };
+interface MoviePlayerResponse {
+  captions?: {
+    playerCaptionsTracklistRenderer: {
+      captionTracks: CaptionTrack[];
     };
   };
+}
+
+interface MoviePlayer extends HTMLElement {
+  getPlayerResponse: () => MoviePlayerResponse;
+}
+
+function isMoviePlayer(el: HTMLElement): el is MoviePlayer {
+  return 'getPlayerResponse' in el;
+}
+
+interface YrtXHR extends XMLHttpRequest {
+  _yrtUrl?: string;
 }
 
 // Intercept fetch to capture YouTube's own caption responses
@@ -44,8 +54,8 @@ window.fetch = async function (...args: Parameters<typeof fetch>) {
         capturedXml = text;
         console.log('[YRT page.js] Intercepted caption XML from fetch, length:', text.length);
       }
-    } catch (err: unknown) {
-      console.log('[YRT page.js] Failed to read intercepted response:', err);
+    } catch (e: unknown) {
+      console.log('[YRT page.js] Failed to read intercepted response:', e);
     }
   }
 
@@ -53,17 +63,23 @@ window.fetch = async function (...args: Parameters<typeof fetch>) {
 };
 
 // Also intercept XMLHttpRequest for older YouTube player paths
-const originalXHROpen = XMLHttpRequest.prototype.open;
-const originalXHRSend = XMLHttpRequest.prototype.send;
+// Use descriptors to capture originals without triggering unbound-method
+const xhrProto = XMLHttpRequest.prototype;
+const openDescriptor = Object.getOwnPropertyDescriptor(xhrProto, 'open');
+const sendDescriptor = Object.getOwnPropertyDescriptor(xhrProto, 'send');
+const originalOpen = openDescriptor?.value as
+  ((method: string, url: string | URL, ...rest: unknown[]) => void) | undefined;
+const originalSend = sendDescriptor?.value as
+  ((body?: Document | XMLHttpRequestBodyInit | null) => void) | undefined;
 
-XMLHttpRequest.prototype.open = function (method: string, url: string | URL, ...rest: unknown[]) {
+XMLHttpRequest.prototype.open = function (this: YrtXHR, method: string, url: string | URL, ...rest: unknown[]) {
   const urlStr = typeof url === 'string' ? url : url.toString();
-  (this as XMLHttpRequest & { _yrtUrl?: string })._yrtUrl = urlStr;
-  return (originalXHROpen as Function).call(this, method, url, ...rest);
+  this._yrtUrl = urlStr;
+  originalOpen?.call(this, method, url, ...rest);
 };
 
-XMLHttpRequest.prototype.send = function (...args: unknown[]) {
-  const yrtUrl = (this as XMLHttpRequest & { _yrtUrl?: string })._yrtUrl ?? '';
+XMLHttpRequest.prototype.send = function (this: YrtXHR, body?: Document | XMLHttpRequestBodyInit | null) {
+  const yrtUrl = this._yrtUrl ?? '';
   if (yrtUrl.includes('timedtext') || yrtUrl.includes('api/timedtext')) {
     this.addEventListener('load', function () {
       try {
@@ -72,15 +88,15 @@ XMLHttpRequest.prototype.send = function (...args: unknown[]) {
           capturedXml = text;
           console.log('[YRT page.js] Intercepted caption XML from XHR, length:', text.length);
         }
-      } catch (err: unknown) {
-        console.log('[YRT page.js] Failed to read XHR response:', err);
+      } catch (e: unknown) {
+        console.log('[YRT page.js] Failed to read XHR response:', e);
       }
     });
   }
-  return (originalXHRSend as Function).apply(this, args);
+  originalSend?.call(this, body);
 };
 
-type TrackError = { kind: 'no-tracks' };
+interface TrackError { kind: 'no-tracks' }
 type FetchError =
   | { kind: 'fetch-status'; status: number }
   | { kind: 'empty-response' }
@@ -88,7 +104,7 @@ type FetchError =
 
 function formatFetchError(e: FetchError): string {
   switch (e.kind) {
-    case 'fetch-status': return `fetch status: ${e.status}`;
+    case 'fetch-status': return `fetch status: ${String(e.status)}`;
     case 'empty-response': return 'empty response';
     case 'fetch-error': return `fetch error: ${e.message}`;
   }
@@ -98,42 +114,42 @@ function getTracks(): Result<CaptionTrack[], TrackError> {
   // Method 1: ytInitialPlayerResponse
   try {
     const resp = window.ytInitialPlayerResponse;
-    if (resp?.captions) {
+    if (resp?.captions !== undefined) {
       return ok(resp.captions.playerCaptionsTracklistRenderer.captionTracks);
     }
-  } catch {}
+  } catch { /* ignored */ }
 
   // Method 2: movie_player.getPlayerResponse()
   try {
-    const player = document.getElementById('movie_player') as MoviePlayer | null;
-    if (player?.getPlayerResponse) {
-      const resp = player.getPlayerResponse();
-      if (resp?.captions) {
+    const el = document.getElementById('movie_player');
+    if (el !== null && isMoviePlayer(el)) {
+      const resp = el.getPlayerResponse();
+      if (resp.captions !== undefined) {
         return ok(resp.captions.playerCaptionsTracklistRenderer.captionTracks);
       }
     }
-  } catch {}
+  } catch { /* ignored */ }
 
   // Method 3: scan script tags
   try {
     const scripts = document.querySelectorAll('script');
     for (const s of scripts) {
       const txt = s.textContent;
-      if (txt?.includes('captionTracks')) {
-        const match = txt.match(/"captionTracks":(\[.*?\])\s*,\s*"/);
-        if (match) {
+      if (txt?.includes('captionTracks') === true) {
+        const match = /"captionTracks":(\[.*?\])\s*,\s*"/.exec(txt);
+        if (match !== null) {
           return ok(JSON.parse(match[1] ?? '[]') as CaptionTrack[]);
         }
       }
     }
-  } catch {}
+  } catch { /* ignored */ }
 
   return err({ kind: 'no-tracks' });
 }
 
 async function fetchCaptionXml(tracks: CaptionTrack[]): Promise<Result<string, FetchError>> {
   const track = tracks.find((t) => t.kind !== 'asr') ?? tracks[0];
-  if (!track) return err({ kind: 'empty-response' });
+  if (track === undefined) return err({ kind: 'empty-response' });
   let url = track.baseUrl;
   url = url.replace(/([?&])fmt=[^&]*/, '$1fmt=srv3');
   if (!url.includes('fmt=')) {

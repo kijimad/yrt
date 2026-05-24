@@ -43,8 +43,8 @@ function requestCaptions(): Promise<CaptionTracksResponse> {
 }
 
 function triggerCaptionLoad(): void {
-  const ccBtn = document.querySelector('.ytp-subtitles-button') as HTMLButtonElement | null;
-  if (ccBtn && ccBtn.getAttribute('aria-pressed') !== 'true') {
+  const ccBtn = document.querySelector<HTMLButtonElement>('.ytp-subtitles-button');
+  if (ccBtn !== null && ccBtn.getAttribute('aria-pressed') !== 'true') {
     ccBtn.click();
     setTimeout(() => {
       if (ccBtn.getAttribute('aria-pressed') === 'true') ccBtn.click();
@@ -68,14 +68,17 @@ function formatLoadError(e: LoadError): string {
 }
 
 async function loadCaptions(): Promise<Result<Caption[], LoadError>> {
-  let { tracks, xml } = await requestCaptions();
+  const first = await requestCaptions();
+  const tracks = first.tracks;
+  let xml = first.xml;
   console.log('[YRT] Caption tracks:', tracks.length, 'XML length:', xml.length);
 
   if (xml.length === 0 && tracks.length > 0) {
     console.log('[YRT] No intercepted XML yet, triggering caption load...');
     triggerCaptionLoad();
     await delay(2000);
-    ({ tracks, xml } = await requestCaptions());
+    const retry = await requestCaptions();
+    xml = retry.xml;
     console.log('[YRT] Retry — XML length:', xml.length);
   }
 
@@ -87,7 +90,7 @@ async function loadCaptions(): Promise<Result<Caption[], LoadError>> {
 }
 
 function renderPanel(): void {
-  if (!video || !reactRoot) return;
+  if (video === null || reactRoot === null) return;
 
   reactRoot.render(
     <Panel
@@ -100,11 +103,11 @@ function renderPanel(): void {
 }
 
 function unmountPanel(): void {
-  if (reactRoot) {
+  if (reactRoot !== null) {
     reactRoot.unmount();
     reactRoot = null;
   }
-  if (container) {
+  if (container !== null) {
     container.remove();
     container = null;
   }
@@ -112,7 +115,7 @@ function unmountPanel(): void {
 
 async function activate(): Promise<void> {
   video = document.querySelector('video');
-  if (!video) {
+  if (video === null) {
     console.warn('[YRT] No video element found');
     return;
   }
@@ -133,7 +136,7 @@ async function activate(): Promise<void> {
   isActive = true;
   localStorage.setItem('yrt-active', '1');
 
-  if (!container) {
+  if (container === null) {
     container = document.createElement('div');
     container.id = 'yrt-container';
     document.body.appendChild(container);
@@ -151,10 +154,10 @@ function deactivate(): void {
 
 function injectButton(): void {
   const existing = document.getElementById('yrt-activate-btn');
-  if (existing) return;
+  if (existing !== null) return;
 
   const controls = document.querySelector('.ytp-right-controls');
-  if (!controls) return;
+  if (controls === null) return;
 
   const btn = document.createElement('button');
   btn.id = 'yrt-activate-btn';
@@ -196,7 +199,7 @@ function watchNavigation(): void {
 
 function init(): void {
   const waitForPlayer = setInterval(() => {
-    if (document.querySelector('.ytp-right-controls')) {
+    if (document.querySelector('.ytp-right-controls') !== null) {
       clearInterval(waitForPlayer);
       injectButton();
       watchNavigation();
