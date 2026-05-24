@@ -218,17 +218,17 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
         ref={panelRef}
         id="yrt-panel"
         position="fixed"
-        bottom="80px"
-        right="20px"
-        width={minimized ? '180px' : '480px'}
-        bg="#1a1a2e"
+        bottom="5rem"
+        right="1.25rem"
+        width={minimized ? '22rem' : '40rem'}
+        bg="#ffffff"
         border="1px solid"
-        borderColor="#3a3a5c"
-        borderRadius="12px"
-        boxShadow="0 8px 32px rgba(0, 0, 0, 0.5)"
+        borderColor="#d0d0d0"
+        borderRadius="1rem"
+        boxShadow="0 0.5rem 2rem rgba(0, 0, 0, 0.15)"
         zIndex={99999}
         fontFamily="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
-        color="#e0e0e0"
+        color="#1a1a1a"
         overflow="hidden"
       >
         {/* Header */}
@@ -236,26 +236,26 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
           data-drag-handle
           justify="space-between"
           align="center"
-          px="12px"
-          py="8px"
-          bg="#16213e"
+          px="1.25rem"
+          py="0.75rem"
+          bg="#f5f5f5"
           cursor="grab"
           userSelect="none"
           borderBottom="1px solid"
-          borderColor="#3a3a5c"
+          borderColor="#e0e0e0"
           _active={{ cursor: 'grabbing' }}
         >
-          <Text fontSize="12px" fontWeight="600" color="#a8b2d1" letterSpacing="0.5px">
+          <Text fontSize="1rem" fontWeight="600" color="#555555" letterSpacing="0.05rem">
             Caption Repeater
           </Text>
-          <HStack gap="4px">
+          <HStack gap="0.5rem">
             <IconButton
               aria-label="Minimize"
               size="2xs"
               variant="ghost"
-              color="#6c7aa0"
-              _hover={{ bg: '#3a3a5c', color: '#e0e0e0' }}
-              borderRadius="4px"
+              color="#999999"
+              _hover={{ bg: '#e0e0e0', color: '#333333' }}
+              borderRadius="0.375rem"
               onClick={() => { setMinimized((m) => !m); }}
             >
               _
@@ -264,9 +264,9 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
               aria-label="Close"
               size="2xs"
               variant="ghost"
-              color="#6c7aa0"
-              _hover={{ bg: '#3a3a5c', color: '#e0e0e0' }}
-              borderRadius="4px"
+              color="#999999"
+              _hover={{ bg: '#e0e0e0', color: '#333333' }}
+              borderRadius="0.375rem"
               onClick={onClose}
             >
               x
@@ -276,36 +276,36 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
 
         {/* Body */}
         {!minimized && (
-          <VStack gap="6px" p="10px" align="stretch">
+          <VStack gap="0.75rem" p="1.25rem" align="stretch">
             {/* Status bar */}
-            <Flex justify="space-between" fontSize="11px" color="#6c7aa0" fontVariantNumeric="tabular-nums">
+            <Flex justify="space-between" fontSize="1rem" color="#999999" fontVariantNumeric="tabular-nums">
               <Text>{cap !== undefined ? `${String(currentIndex + 1)} / ${String(captions.length)}` : '-'}</Text>
               <Text>{cap !== undefined ? `${formatTime(cap.start)} - ${formatTime(cap.end)}` : '-'}</Text>
             </Flex>
 
             {/* Captions */}
-            <Box bg="#0f0f23" borderRadius="6px" border="1px solid" borderColor="#2a2a4a" py="6px">
+            <Box bg="#fafafa" borderRadius="0.75rem" border="1px solid" borderColor="#e8e8e8" py="0.75rem">
               {prevCap !== undefined && (
-                <Text px="12px" py="4px" fontSize="14px" color="#555a70" lineHeight="1.5" wordBreak="break-word">
+                <Text px="1.25rem" py="0.375rem" fontSize="1.25rem" color="#aaaaaa" lineHeight="1.5" wordBreak="break-word">
                   {prevCap.text}
                 </Text>
               )}
               {cap !== undefined && (
                 <Text
-                  px="12px"
-                  py="8px"
-                  fontSize="32px"
-                  color="#f0f0f0"
+                  px="1.25rem"
+                  py="0.75rem"
+                  fontSize="2.5rem"
+                  color="#1a1a1a"
                   lineHeight="1.5"
                   wordBreak="break-word"
-                  borderLeft="3px solid"
+                  borderLeft="0.25rem solid"
                   borderColor="#e94560"
                 >
                   {cap.text}
                 </Text>
               )}
               {nextCap !== undefined && (
-                <Text px="12px" py="4px" fontSize="14px" color="#555a70" lineHeight="1.5" wordBreak="break-word">
+                <Text px="1.25rem" py="0.375rem" fontSize="1.25rem" color="#aaaaaa" lineHeight="1.5" wordBreak="break-word">
                   {nextCap.text}
                 </Text>
               )}
@@ -315,11 +315,11 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
             {looping && (
               <Text
                 textAlign="center"
-                py="4px"
+                py="0.5rem"
                 color="#e94560"
-                fontSize="11px"
+                fontSize="1rem"
                 fontWeight="600"
-                letterSpacing="1px"
+                letterSpacing="0.0625rem"
                 animation="yrt-pulse 1.5s ease-in-out infinite"
               >
                 &#x21BB; {repeatCount}
@@ -327,18 +327,18 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
             )}
 
             {/* Nav controls */}
-            <HStack gap="6px">
+            <HStack gap="0.75rem">
               <Button
                 flex={1}
-                size="sm"
-                py="8px"
-                bg="#1a1a40"
-                color="#a8b2d1"
+                size="lg"
+                py="1.25rem"
+                bg="#f0f0f0"
+                color="#333333"
                 border="1px solid"
-                borderColor="#3a3a5c"
-                borderRadius="6px"
-                fontSize="12px"
-                _hover={{ bg: '#2a2a50' }}
+                borderColor="#d0d0d0"
+                borderRadius="0.75rem"
+                fontSize="1.25rem"
+                _hover={{ bg: '#e0e0e0' }}
                 _active={{ transform: 'scale(0.96)' }}
                 _disabled={{ opacity: 0.3, cursor: 'not-allowed' }}
                 disabled={currentIndex === 0}
@@ -348,14 +348,14 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
               </Button>
               <Button
                 flex={2}
-                size="sm"
-                py="8px"
+                size="lg"
+                py="1.25rem"
                 bg="#e94560"
                 color="#fff"
                 fontWeight="600"
-                fontSize="13px"
-                letterSpacing="0.5px"
-                borderRadius="6px"
+                fontSize="1.5rem"
+                letterSpacing="0.05rem"
+                borderRadius="0.75rem"
                 _hover={{ bg: '#ff6b81' }}
                 _active={{ transform: 'scale(0.96)' }}
                 _disabled={{ opacity: 0.3, cursor: 'not-allowed' }}
@@ -367,18 +367,18 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
             </HStack>
 
             {/* Secondary controls */}
-            <HStack gap="6px">
+            <HStack gap="0.75rem">
               <Button
                 flex={1}
                 size="sm"
-                py="6px"
-                bg="#1a1a40"
-                color="#6c7aa0"
+                py="0.625rem"
+                bg="#f0f0f0"
+                color="#666666"
                 border="1px solid"
-                borderColor="#2a2a4a"
-                borderRadius="6px"
-                fontSize="11px"
-                _hover={{ bg: '#2a2a50', color: '#a8b2d1' }}
+                borderColor="#d0d0d0"
+                borderRadius="0.5rem"
+                fontSize="1rem"
+                _hover={{ bg: '#e0e0e0', color: '#333333' }}
                 _active={{ transform: 'scale(0.96)' }}
                 onClick={() => { setLooping((l) => !l); }}
               >
@@ -387,14 +387,14 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
               <Button
                 flex={1}
                 size="sm"
-                py="6px"
-                bg="#1a1a40"
-                color="#6c7aa0"
+                py="0.625rem"
+                bg="#f0f0f0"
+                color="#666666"
                 border="1px solid"
-                borderColor="#2a2a4a"
-                borderRadius="6px"
-                fontSize="11px"
-                _hover={{ bg: '#2a2a50', color: '#a8b2d1' }}
+                borderColor="#d0d0d0"
+                borderRadius="0.5rem"
+                fontSize="1rem"
+                _hover={{ bg: '#e0e0e0', color: '#333333' }}
                 _active={{ transform: 'scale(0.96)' }}
                 onClick={() => {
                   const newIdx = (speedIdx + 1) % speeds.length;

@@ -163,7 +163,7 @@ function injectButton(): void {
   btn.id = 'yrt-activate-btn';
   btn.className = 'ytp-button';
   btn.title = 'Caption Repeater';
-  btn.innerHTML = `<img src="${chrome.runtime.getURL('icons/icon48.png')}" style="width:24px;height:24px;" />`;
+  btn.innerHTML = `<img src="${chrome.runtime.getURL('icons/icon48.png')}" style="width:1.5rem;height:1.5rem;" />`;
   btn.style.cssText = 'opacity:0.8;cursor:pointer;';
   btn.addEventListener('click', () => {
     if (isActive) {
