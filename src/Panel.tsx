@@ -175,7 +175,7 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
     if (el === null || header === null) return;
 
     let dragging = false;
-    let startX = 0, startY = 0, origX = 0, origY = 0;
+    let startX = 0, startY = 0, origBottom = 0, origRight = 0;
 
     const onMouseDown = (e: MouseEvent): void => {
       if ((e.target as HTMLElement).tagName === 'BUTTON') return;
@@ -183,17 +183,17 @@ export function Panel({ captions, initialIndex, video, onClose }: PanelProps): R
       startX = e.clientX;
       startY = e.clientY;
       const rect = el.getBoundingClientRect();
-      origX = rect.left;
-      origY = rect.top;
+      origBottom = window.innerHeight - rect.bottom;
+      origRight = window.innerWidth - rect.right;
       e.preventDefault();
     };
 
     const onMouseMove = (e: MouseEvent): void => {
       if (!dragging) return;
-      el.style.left = String(origX + (e.clientX - startX)) + 'px';
-      el.style.top = String(origY + (e.clientY - startY)) + 'px';
-      el.style.right = 'auto';
-      el.style.bottom = 'auto';
+      el.style.bottom = String(origBottom - (e.clientY - startY)) + 'px';
+      el.style.right = String(origRight - (e.clientX - startX)) + 'px';
+      el.style.top = 'auto';
+      el.style.left = 'auto';
     };
 
     const onMouseUp = (): void => { dragging = false; };
